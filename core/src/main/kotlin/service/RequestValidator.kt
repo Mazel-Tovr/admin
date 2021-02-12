@@ -31,6 +31,7 @@ import org.kodein.di.generic.*
 
 const val agentIsBusyMessage =
     "Sorry, this agent is busy at the moment. Please try again later"
+
 internal class RequestValidator(override val kodein: Kodein) : KodeinAware {
     private val logger = KotlinLogging.logger { }
 
@@ -46,17 +47,7 @@ internal class RequestValidator(override val kodein: Kodein) : KodeinAware {
 
 
                     if (agentId != null) {
-                        val agentInfo = am.getOrNull(agentId)
-                        when(agentInfo?.status) {
-                            null -> {
-                                if (am.allEntries().none { it.agent.groupId == agentId }) {
-                                    call.respond(
-                                        HttpStatusCode.BadRequest,
-                                        ValidationResponse("Agent '$agentId' not found")
-                                    )
-                                    return@intercept finish()
-                                }
-                            }
+                        when (am.getActualAgentStatus(agentId)) {
                             AgentStatus.BUSY -> {
                                 val agentPath = locations.href(
                                     ApiRoot().let(ApiRoot::Agents).let { ApiRoot.Agents.Agent(it, agentId) }
@@ -73,14 +64,21 @@ internal class RequestValidator(override val kodein: Kodein) : KodeinAware {
                                     }
                                 }
                             }
-                            else -> Unit
+                            else -> if (am.getOrNull(agentId) == null &&
+                                am.allEntries().none { it.agent.groupId == agentId }
+                            ) {
+                                call.respond(
+                                    HttpStatusCode.BadRequest,
+                                    ValidationResponse("Agent '$agentId' not found")
+                                )
+                                return@intercept finish()
+                            }
                         }
                     }
                 }
             }
         }
     }
-
 }
 
 @Serializable

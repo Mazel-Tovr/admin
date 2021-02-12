@@ -96,28 +96,26 @@ class DrillAdminEndpoints(override val kodein: Kodein) : KodeinAware {
                     val (_, agentId) = params
                     logger.info { "Toggle agent $agentId" }
                     val (status, response) = agentManager[agentId]?.let { agentInfo ->
-                        when (agentInfo.status) {
+                        val actualStatus = agentManager.getActualAgentStatus(agentId)
+                        when (actualStatus) {
                             AgentStatus.OFFLINE -> AgentStatus.ONLINE
                             AgentStatus.ONLINE -> AgentStatus.OFFLINE
                             else -> null
                         }?.let { newStatus ->
-                            agentManager.agentSessions(agentId).applyEach {
+                            agentManager.instanceIds(agentId).forEach { (key, value) ->
+                                agentManager.updateInstanceStatus(agentId, key, newStatus)
                                 val toggleValue = newStatus == AgentStatus.ONLINE
                                 agentInfo.plugins.map { pluginId ->
-                                    sendToTopic<Communication.Plugin.ToggleEvent, TogglePayload>(
+                                    value.agentWsSession.sendToTopic<Communication.Plugin.ToggleEvent, TogglePayload>(
                                         TogglePayload(pluginId, toggleValue)
                                     )
                                 }.forEach { it.await() } //TODO coroutine scope (supervisor)
                             }
-                            with(agentManager) {
-                                entryOrNull(agentId)!!.updateAgent {
-                                    it.copy(status = newStatus)
-                                }.commitChanges()
-                            }
+                            agentManager.notifyAgents(agentId)
                             logger.info { "Agent $agentId toggled, new status - $newStatus." }
                             HttpStatusCode.OK to EmptyContent
                         } ?: HttpStatusCode.Conflict to ErrorResponse(
-                            "Cannot toggle agent $agentId on status ${agentInfo.status}"
+                            "Cannot toggle agent $agentId on status $actualStatus"
                         )
                     } ?: HttpStatusCode.NotFound to EmptyContent
                     call.respond(status, response)
