@@ -39,6 +39,7 @@ class AgentEndpoints(override val kodein: Kodein) : KodeinAware {
     private val agentManager by instance<AgentManager>()
 
     init {
+        println("NEWWWWWWWWWWWWWWWW VEEEEEEEEEEEEEEEEEEEERRRRRRRRSSION @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
         app.routing {
 
             authenticate {

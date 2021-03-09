@@ -35,6 +35,9 @@ class PluginSenders(override val kodein: Kodein) : KodeinAware {
     private val pluginStores by instance<PluginStores>()
     private val pluginCaches by instance<PluginCaches>()
     private val pluginSessions by instance<PluginSessions>()
+    init{
+        println("SUPER MEGA NEW VERSION")
+    }
 
     fun sender(pluginId: String): Sender = object : Sender {
         override suspend fun send(context: SendContext, destination: Any, message: Any) {
@@ -47,21 +50,32 @@ class PluginSenders(override val kodein: Kodein) : KodeinAware {
             if (message == "") {
                 logger.trace { "Removed message by key $messageKey" }
                 pluginCache[dest] = ""
-                pluginStores[pluginId].let { store ->
-                    withContext(Dispatchers.IO) {
-                        store.deleteMessage(messageKey)
-                    }
-                }
-            } else {
-                logger.trace { "Sending message to $messageKey" }
-                pluginStores[pluginId].let { store ->
-                    withContext(Dispatchers.IO) {
-                        measureTimedValue {
-                            store.storeMessage(messageKey, message)
-                        }.let {
-                            logger.trace { "Stored message (key=$messageKey, size=${it.value}) in ${it.duration}" }
+                kotlin.runCatching {
+                    pluginStores[pluginId].let { store ->
+                        withContext(Dispatchers.IO) {
+                            store.deleteMessage(messageKey)
                         }
                     }
+                }.onFailure {
+                    println("[@@@@] $messageKey to ${(message as? Collection<*>)?.size }   \n $it ")
+                    it.printStackTrace()
+
+                }
+            } else {
+                kotlin.runCatching {
+                    logger.trace { "Sending message to $messageKey" }
+                    pluginStores[pluginId].let { store ->
+                        withContext(Dispatchers.IO) {
+                            measureTimedValue {
+                                store.storeMessage(messageKey, message)
+                            }.let {
+                                logger.trace { "Stored message (key=$messageKey, size=${it.value}) in ${it.duration}" }
+                            }
+                        }
+                    }
+                }.onFailure {
+                    println("[@@@@] $messageKey to ${(message as? Collection<*>)?.size } \n $it ")
+                    it.printStackTrace()
                 }
                 pluginCache.remove(dest)
             }
